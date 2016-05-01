@@ -1,0 +1,15 @@
+name: Freeze
+main: FreezePlugin
+version: 0.0.1-SNAPSHOT
+description: Freezing test
+author: Pokechu22
+depend: [ProtocolLib]
+
+
+commands:
+  freeze: 
+    description: Freeze yourself
+    aliases: []
+  unfreeze: 
+    description: Unfreeze yourself
+    aliases: []
