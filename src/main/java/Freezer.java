@@ -40,14 +40,27 @@ public class Freezer extends PacketAdapter {
 		}
 
 		if (event.getPacketType() == PacketType.Play.Client.POSITION) {
-			// Normal clients shouldn't hit this code in most cases, but
-			// will at the very start if they have a bad ping
+			// Convert to a "Player" packet, which has no real data.
 			event.setCancelled(true);
+
+			PacketContainer oldPacket = event.getPacket();
+			PacketContainer newPacket = protocolManager.createPacket(PacketType.Play.Client.FLYING);
+
+			newPacket.getBooleans().write(0, oldPacket.getBooleans().read(0));  // On ground
+
+			try {
+				// Can't set the event's packet directly due to https://github.com/dmulloy2/ProtocolLib/issues/201
+				protocolManager.recieveClientPacket(event.getPlayer(), newPacket);
+			} catch (Exception e) {
+				throw new RuntimeException("Failed to rebroadcast player packet", e);
+			}
 
 			resendPosition(event.getPlayer());
 		} else if (event.getPacketType() == PacketType.Play.Client.POSITION_LOOK) {
 			// We want to cancel out the position portion but not the
 			// look portion, so we resend the packet as a look packet
+			event.setCancelled(true);
+
 			PacketContainer oldPacket = event.getPacket();
 			PacketContainer newPacket = protocolManager.createPacket(PacketType.Play.Client.LOOK);
 
@@ -56,7 +69,11 @@ public class Freezer extends PacketAdapter {
 			newPacket.getFloat().write(1, oldPacket.getFloat().read(1));  // Pitch
 			newPacket.getBooleans().write(0, oldPacket.getBooleans().read(0));  // On ground
 
-			event.setPacket(newPacket);
+			try {
+				protocolManager.recieveClientPacket(event.getPlayer(), newPacket);
+			} catch (Exception e) {
+				throw new RuntimeException("Failed to rebroadcast look packet", e);
+			}
 
 			resendPosition(event.getPlayer());
 		}
@@ -75,7 +92,7 @@ public class Freezer extends PacketAdapter {
 	public void unfreezePlayer(Player player) {
 		if (frozenPlayers.remove(player.getUniqueId())) {
 			endFreeze(player);
-		}		
+		}
 	}
 
 	private void startFreeze(Player player) {
@@ -96,7 +113,7 @@ public class Freezer extends PacketAdapter {
 			protocolManager.sendServerPacket(player, abilities);
 			protocolManager.sendServerPacket(player, entityProperties);
 		} catch (Exception e) {
-			getPlugin().getLogger().log(Level.SEVERE, "Failed to send freeze start packets", e);
+			throw new RuntimeException("Failed to send freeze start packets", e);
 		}
 
 		resendPosition(player);
@@ -122,20 +139,26 @@ public class Freezer extends PacketAdapter {
 			protocolManager.sendServerPacket(player, abilities);
 			protocolManager.sendServerPacket(player, entityProperties);
 		} catch (Exception e) {
-			getPlugin().getLogger().log(Level.SEVERE, "Failed to send freeze end packets", e);
+			throw new RuntimeException("Failed to send freeze end packets", e);
 		}
 	}
 
 	private void resendPosition(Player player) {
-		PacketContainer position = protocolManager.createPacket(PacketType.Play.Server.POSITION);
+		PacketContainer positionPacket = protocolManager.createPacket(PacketType.Play.Server.POSITION);
 		Location location = player.getLocation();
 
-		position.getDoubles().write(0, location.getX());
-		position.getDoubles().write(1, location.getY());
-		position.getDoubles().write(2, location.getZ());
-		position.getFloat().write(0, 0f);  // No change in yaw
-		position.getFloat().write(1, 0f);  // No change in pitch
-		getFlagsModifier(position).write(0, EnumSet.of(PlayerTeleportFlag.X_ROT, PlayerTeleportFlag.Y_ROT));  // Mark pitch and yaw as relative
+		positionPacket.getDoubles().write(0, location.getX());
+		positionPacket.getDoubles().write(1, location.getY());
+		positionPacket.getDoubles().write(2, location.getZ());
+		positionPacket.getFloat().write(0, 0f);  // No change in yaw
+		positionPacket.getFloat().write(1, 0f);  // No change in pitch
+		getFlagsModifier(positionPacket).write(0, EnumSet.of(PlayerTeleportFlag.X_ROT, PlayerTeleportFlag.Y_ROT));  // Mark pitch and yaw as relative
+
+		try {
+			protocolManager.sendServerPacket(player, positionPacket);
+		} catch (Exception e) {
+			throw new RuntimeException("Failed to send position packet", e);
+		}
 	}
 
 	private static final Class<?> FLAGS_CLASS = MinecraftReflection.getMinecraftClass("EnumPlayerTeleportFlags",
