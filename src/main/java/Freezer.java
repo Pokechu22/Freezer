@@ -1,9 +1,7 @@
-import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
-import java.util.logging.Level;
 
 import org.bukkit.GameMode;
 import org.bukkit.Location;
@@ -20,7 +18,6 @@ import com.comphenix.protocol.reflect.StructureModifier;
 import com.comphenix.protocol.utility.MinecraftReflection;
 import com.comphenix.protocol.wrappers.BukkitConverters;
 import com.comphenix.protocol.wrappers.EnumWrappers;
-import com.comphenix.protocol.wrappers.WrappedAttribute;
 
 public class Freezer extends PacketAdapter {
 	private Set<UUID> frozenPlayers = new HashSet<>();
@@ -102,7 +99,9 @@ public class Freezer extends PacketAdapter {
 		abilities.getBooleans().write(2, false);  // Allow flight is set to false so that players cannot toggle flight
 		abilities.getBooleans().write(3, player.getGameMode() == GameMode.CREATIVE);
 		abilities.getFloat().write(0, 0f);  // Set fly speed to 0
-		abilities.getFloat().write(1, player.getWalkSpeed());  // This only changes FOV; we want to leave FOV alone
+		// Since we are flying, you'd think walk speed doesn't matter, but this is actually FOV.
+		// The division by two is needed because bukkit decided to multiply the value by two for some strange reason.
+		abilities.getFloat().write(1, player.getWalkSpeed() / 2);
 
 		try {
 			protocolManager.sendServerPacket(player, abilities);
@@ -120,8 +119,8 @@ public class Freezer extends PacketAdapter {
 		abilities.getBooleans().write(1, player.isFlying());
 		abilities.getBooleans().write(2, player.getAllowFlight());
 		abilities.getBooleans().write(3, player.getGameMode() == GameMode.CREATIVE);
-		abilities.getFloat().write(0, player.getFlySpeed());
-		abilities.getFloat().write(1, player.getWalkSpeed());
+		abilities.getFloat().write(0, player.getFlySpeed() / 2);  // Division by two is needed to get the real value
+		abilities.getFloat().write(1, player.getWalkSpeed() / 2);
 
 		try {
 			protocolManager.sendServerPacket(player, abilities);
