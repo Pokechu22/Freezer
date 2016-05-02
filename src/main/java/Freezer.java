@@ -104,16 +104,10 @@ public class Freezer extends PacketAdapter {
 		abilities.getFloat().write(0, 0f);  // Set fly speed to 0
 		abilities.getFloat().write(1, player.getWalkSpeed());  // This only changes FOV; we want to leave FOV alone
 
-		PacketContainer entityProperties = protocolManager.createPacket(PacketType.Play.Server.UPDATE_ATTRIBUTES);
-		entityProperties.getIntegers().write(0, player.getEntityId());
-		WrappedAttribute attribute = WrappedAttribute.newBuilder().packet(entityProperties).attributeKey("generic.movementSpeed").baseValue(0).build();
-		entityProperties.getAttributeCollectionModifier().write(0, Arrays.asList(attribute));
-
 		try {
 			protocolManager.sendServerPacket(player, abilities);
-			protocolManager.sendServerPacket(player, entityProperties);
 		} catch (Exception e) {
-			throw new RuntimeException("Failed to send freeze start packets", e);
+			throw new RuntimeException("Failed to send freeze start packet", e);
 		}
 
 		resendPosition(player);
@@ -129,17 +123,10 @@ public class Freezer extends PacketAdapter {
 		abilities.getFloat().write(0, player.getFlySpeed());
 		abilities.getFloat().write(1, player.getWalkSpeed());
 
-		PacketContainer entityProperties = protocolManager.createPacket(PacketType.Play.Server.UPDATE_ATTRIBUTES);
-		entityProperties.getIntegers().write(0, player.getEntityId());
-		// Per the wiki, default is about .7 but actually .699999988079071
-		WrappedAttribute attribute = WrappedAttribute.newBuilder().packet(entityProperties).attributeKey("generic.movementSpeed").baseValue(.699999988079071).build();
-		entityProperties.getAttributeCollectionModifier().write(0, Arrays.asList(attribute));
-
 		try {
 			protocolManager.sendServerPacket(player, abilities);
-			protocolManager.sendServerPacket(player, entityProperties);
 		} catch (Exception e) {
-			throw new RuntimeException("Failed to send freeze end packets", e);
+			throw new RuntimeException("Failed to send freeze end packet", e);
 		}
 	}
 
