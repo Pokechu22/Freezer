@@ -140,10 +140,15 @@ public class Freezer extends PacketAdapter {
 		positionPacket.getFloat().write(1, 0f);  // No change in pitch
 		getFlagsModifier(positionPacket).write(0, EnumSet.of(PlayerTeleportFlag.X_ROT, PlayerTeleportFlag.Y_ROT));  // Mark pitch and yaw as relative
 
+		PacketContainer velocityPacket = protocolManager.createPacket(PacketType.Play.Server.ENTITY_VELOCITY);
+		velocityPacket.getIntegers().write(0, player.getEntityId());
+		velocityPacket.getIntegers().write(1, 0).write(2, 0).write(3, 0);  // Set velocity to 0,0,0
+
 		try {
 			protocolManager.sendServerPacket(player, positionPacket);
+			protocolManager.sendServerPacket(player, velocityPacket);
 		} catch (Exception e) {
-			throw new RuntimeException("Failed to send position packet", e);
+			throw new RuntimeException("Failed to send position and velocity packets", e);
 		}
 	}
 
