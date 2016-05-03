@@ -1,9 +1,9 @@
 import java.util.EnumSet;
-import java.util.HashSet;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
-import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
@@ -20,12 +20,24 @@ import com.comphenix.protocol.wrappers.BukkitConverters;
 import com.comphenix.protocol.wrappers.EnumWrappers;
 
 public class Freezer extends PacketAdapter {
-	private Set<UUID> frozenPlayers = new HashSet<>();
+	private Map<UUID, FrozenPlayerInfo> frozenPlayers = new HashMap<>();
 	private ProtocolManager protocolManager;
 
+	private static class FrozenPlayerInfo {
+		public final boolean allowFlight;
+		public final boolean isFlying;
+
+		public FrozenPlayerInfo(boolean allowFlight, boolean isFlying) {
+			this.allowFlight = allowFlight;
+			this.isFlying = isFlying;
+		}
+	}
+
 	public Freezer(ProtocolManager manager, Plugin plugin, ListenerPriority priority) {
-		super(plugin, priority, PacketType.Play.Client.POSITION,
-				PacketType.Play.Client.POSITION_LOOK);
+		super(plugin, priority,
+				PacketType.Play.Client.POSITION,
+				PacketType.Play.Client.POSITION_LOOK,
+				PacketType.Play.Server.ABILITIES);
 		this.protocolManager = manager;
 	}
 
@@ -75,58 +87,67 @@ public class Freezer extends PacketAdapter {
 			resendPosition(event.getPlayer());
 		}
 	}
+	
+	@Override
+	public void onPacketSending(PacketEvent event) {
+		if (!isFrozen(event.getPlayer())) {
+			// Only process frozen players
+			return;
+		}
+
+		if (event.getPacketType() == PacketType.Play.Server.ABILITIES) {
+			if (!event.getPacket().getBooleans().read(1)) {
+				// Not currently flying...
+				event.setCancelled(true);
+				return;
+			}
+			event.getPacket().getBooleans().write(1, true);  // Is flying
+			event.getPacket().getBooleans().write(2, false);  // Can fly - when false, players can't toggle flight, even if they are already flying
+			// Fly speed - changing this keeps players from rising or falling with shift / space, and also keeps them from moving.
+			event.getPacket().getFloat().write(0, 0f);
+			// We don't change walk speed since that only affects FOV, and the player is flying anyways.
+		}
+	}
 
 	public boolean isFrozen(Player player) {
-		return frozenPlayers.contains(player.getUniqueId());
+		return frozenPlayers.containsKey(player.getUniqueId());
 	}
 
 	public void freezePlayer(Player player) {
-		if (frozenPlayers.add(player.getUniqueId())) {
+		if (!isFrozen(player)) {
 			startFreeze(player);
 		}
 	}
 
 	public void unfreezePlayer(Player player) {
-		if (frozenPlayers.remove(player.getUniqueId())) {
+		if (isFrozen(player)) {
 			endFreeze(player);
 		}
 	}
 
 	private void startFreeze(Player player) {
-		PacketContainer abilities = protocolManager.createPacket(PacketType.Play.Server.ABILITIES);
-		abilities.getBooleans().write(0, false);  // Is invincible - currently unhandled
-		abilities.getBooleans().write(1, true);  // Is flying
-		abilities.getBooleans().write(2, false);  // Allow flight is set to false so that players cannot toggle flight
-		abilities.getBooleans().write(3, player.getGameMode() == GameMode.CREATIVE);
-		abilities.getFloat().write(0, 0f);  // Set fly speed to 0
-		// Since we are flying, you'd think walk speed doesn't matter, but this is actually FOV.
-		// The division by two is needed because bukkit decided to multiply the value by two for some strange reason.
-		abilities.getFloat().write(1, player.getWalkSpeed() / 2);
+		frozenPlayers.put(player.getUniqueId(), new FrozenPlayerInfo(player.getAllowFlight(), player.isFlying()));
 
-		try {
-			protocolManager.sendServerPacket(player, abilities);
-		} catch (Exception e) {
-			throw new RuntimeException("Failed to send freeze start packet", e);
-		}
+		// Tell Bukkit that this player is flying and shouldn't be effected by gravity.
+		// The packet that is actually sent is modified in onPacketSending, and
+		// the client won't receive these exact values.
+		// However, changing the values also does cause the abilities packet to
+		// be sent, meaning that it can be edited to have the info we want.
+		// Sadly, we need to call two methods which means two packets when only
+		// one packet really is needed, since Bukkit doesn't let one set
+		// isFlying to true without allowing flight.
+		player.setAllowFlight(true);
+		player.setFlying(true);
 
 		resendPosition(player);
 	}
 
 	private void endFreeze(Player player) {
-		PacketContainer abilities = protocolManager.createPacket(PacketType.Play.Server.ABILITIES);
+		FrozenPlayerInfo info = frozenPlayers.remove(player.getUniqueId());
 
-		abilities.getBooleans().write(0, false);  // Is invincible - currently unhandled
-		abilities.getBooleans().write(1, player.isFlying());
-		abilities.getBooleans().write(2, player.getAllowFlight());
-		abilities.getBooleans().write(3, player.getGameMode() == GameMode.CREATIVE);
-		abilities.getFloat().write(0, player.getFlySpeed() / 2);  // Division by two is needed to get the real value
-		abilities.getFloat().write(1, player.getWalkSpeed() / 2);
-
-		try {
-			protocolManager.sendServerPacket(player, abilities);
-		} catch (Exception e) {
-			throw new RuntimeException("Failed to send freeze end packet", e);
-		}
+		// Again, two packets are sent, though we do not modify them this time.
+		player.setAllowFlight(info.allowFlight);
+		player.setFlying(info.isFlying);
 	}
 
 	private void resendPosition(Player player) {
