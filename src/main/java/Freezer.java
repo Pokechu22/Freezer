@@ -20,11 +20,24 @@ import com.comphenix.protocol.wrappers.BukkitConverters;
 import com.comphenix.protocol.wrappers.EnumWrappers;
 
 public class Freezer extends PacketAdapter {
-	private Map<UUID, FrozenPlayerInfo> frozenPlayers = new HashMap<>();
 	private ProtocolManager protocolManager;
 
+	/**
+	 * All players currently frozen, by UUID.
+	 */
+	private Map<UUID, FrozenPlayerInfo> frozenPlayers = new HashMap<>();
+
+	/**
+	 * Stores state information about a player who is frozen.
+	 */
 	private static class FrozenPlayerInfo {
+		/**
+		 * Was the player able to fly when they were frozen?
+		 */
 		public final boolean allowFlight;
+		/**
+		 * Was the player actively flying when they were frozen?
+		 */
 		public final boolean isFlying;
 
 		public FrozenPlayerInfo(boolean allowFlight, boolean isFlying) {
@@ -109,22 +122,38 @@ public class Freezer extends PacketAdapter {
 		}
 	}
 
+	/**
+	 * Checks if the given player is frozen.
+	 */
 	public boolean isFrozen(Player player) {
 		return frozenPlayers.containsKey(player.getUniqueId());
 	}
 
+	/**
+	 * Freezes the given player.  If the player is already frozen, nothing happens.
+	 */
 	public void freezePlayer(Player player) {
 		if (!isFrozen(player)) {
 			startFreeze(player);
 		}
 	}
 
+	/**
+	 * Unfreezes the given player.  If the player not currently frozen, nothing happens.
+	 */
 	public void unfreezePlayer(Player player) {
 		if (isFrozen(player)) {
 			endFreeze(player);
 		}
 	}
 
+	/**
+	 * Internal start freeze logic.
+	 *
+	 * Add the player to the frozen players list, then mark them as flying (so
+	 * that Bukkit doesn't kick them for flying). Finally, resend their position
+	 * and velocity.
+	 */
 	private void startFreeze(Player player) {
 		frozenPlayers.put(player.getUniqueId(), new FrozenPlayerInfo(player.getAllowFlight(), player.isFlying()));
 
@@ -142,6 +171,12 @@ public class Freezer extends PacketAdapter {
 		resendPosition(player);
 	}
 
+	/**
+	 * Internal freeze end logic.
+	 * 
+	 * Remove the player from the frozen players list, and revert their flying state.
+	 * @param player
+	 */
 	private void endFreeze(Player player) {
 		FrozenPlayerInfo info = frozenPlayers.remove(player.getUniqueId());
 
@@ -150,6 +185,10 @@ public class Freezer extends PacketAdapter {
 		player.setFlying(info.isFlying);
 	}
 
+	/**
+	 * Sends a position packet and a velocity packet, with the position packet
+	 * _only_ effecting position and not rotation.
+	 */
 	private void resendPosition(Player player) {
 		PacketContainer positionPacket = protocolManager.createPacket(PacketType.Play.Server.POSITION);
 		Location location = player.getLocation();
@@ -173,13 +212,24 @@ public class Freezer extends PacketAdapter {
 		}
 	}
 
+	/**
+	 * Internal logic for managing the flags field for the position packet
+	 */
 	private static final Class<?> FLAGS_CLASS = MinecraftReflection.getMinecraftClass("EnumPlayerTeleportFlags",
 			"PacketPlayOutPosition$EnumPlayerTeleportFlags");
 
+	/**
+	 * Flags used to mark whether a change is aboslute or relative in the position packet.
+	 * 
+	 * If a flag is present, then the change is relative; otherwise, it is absolute.
+	 */
 	private static enum PlayerTeleportFlag {
 		X, Y, Z, Y_ROT, X_ROT
 	}
 
+	/**
+	 * Gets the structure flags structure modifier for the given player position packet.
+	 */
 	private StructureModifier<Set<PlayerTeleportFlag>> getFlagsModifier(PacketContainer packet) {
 		return packet.getModifier().withType(Set.class,
 				BukkitConverters.getSetConverter(FLAGS_CLASS, EnumWrappers
