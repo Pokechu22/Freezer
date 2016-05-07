@@ -8,7 +8,9 @@ import com.comphenix.protocol.ProtocolLibrary;
 import com.comphenix.protocol.ProtocolManager;
 import com.comphenix.protocol.events.ListenerPriority;
 
-
+/**
+ * Main plugin code
+ */
 public class FreezePlugin extends JavaPlugin {
 	private ProtocolManager protocolManager;
 	private Freezer freezer;
@@ -23,6 +25,9 @@ public class FreezePlugin extends JavaPlugin {
 			@Override
 			public boolean onCommand(CommandSender sender, Command command,
 					String label, String[] args) {
+				if (args.length != 0) {
+					return false;
+				}
 				freezer.freezePlayer((Player)sender);
 				return true;
 			}
@@ -31,6 +36,9 @@ public class FreezePlugin extends JavaPlugin {
 			@Override
 			public boolean onCommand(CommandSender sender, Command command,
 					String label, String[] args) {
+				if (args.length != 0) {
+					return false;
+				}
 				freezer.unfreezePlayer((Player)sender);
 				return true;
 			}

@@ -1,7 +1,7 @@
 name: Freeze
 main: FreezePlugin
 version: 0.0.1-SNAPSHOT
-description: Freezing test
+description: Sample of how freezing can be implemented without having clients move on their side
 author: Pokechu22
 depend: [ProtocolLib]
 
